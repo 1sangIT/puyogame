@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>개인 업무관리 칸반보드</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- html2pdf.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- Tailwind Custom Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              500: '#2563eb',
+              600: '#1d4ed8',
+              700: '#1e40af',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Drag and Drop visual feedback */
+    .kanban-column.drag-over {
+      background-color: #eff6ff !important;
+      border-color: #3b82f6 !important;
+    }
+    
+    .task-card.dragging {
+      opacity: 0.4;
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-slate-900 text-white rounded-md">
+          <i data-lucide="kanban" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">개인 업무관리 칸반보드</h1>
+          <p class="text-xs text-slate-500">브라우저 기반 로컬 업무 & 주간 보고서 관리 도구</p>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="openTaskModal()" class="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 shadow-sm">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>새 업무 추가</span>
+        </button>
+        <button onclick="openWeeklyReportModal()" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 shadow-sm">
+          <i data-lucide="file-text" class="w-4 h-4"></i>
+          <span>주간 보고 보기</span>
+        </button>
+        <button onclick="downloadWeeklyReportPDF()" title="주간 보고서 PDF 저장" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-md transition-colors flex items-center gap-1 border border-slate-200">
+          <i data-lucide="file-down" class="w-3.5 h-3.5 text-rose-600"></i>
+          <span class="hidden md:inline">PDF 저장</span>
+        </button>
+        <div class="h-5 w-px bg-slate-200 mx-1 hidden sm:block"></div>
+        <button onclick="clearCompletedTasks()" title="완료된 업무 제거" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-md transition-colors flex items-center gap-1">
+          <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
+          <span class="hidden md:inline">완료 업무 정리</span>
+        </button>
+        <button onclick="confirmResetData()" title="전체 데이터 초기화" class="px-3 py-2 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 text-xs font-medium rounded-md transition-colors flex items-center gap-1 border border-slate-200">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span class="hidden md:inline">초기화</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col gap-6">
+
+    <!-- KPI Dashboard Summary -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="bg-white border border-slate-200 p-3.5 rounded-md shadow-sm">
+        <div class="text-xs font-medium text-slate-500 mb-1">전체 업무</div>
+        <div class="text-2xl font-bold text-slate-900" id="stat-total">0</div>
+      </div>
+      <div class="bg-white border border-slate-200 p-3.5 rounded-md shadow-sm">
+        <div class="text-xs font-medium text-slate-500 mb-1">진행 중</div>
+        <div class="text-2xl font-bold text-brand-600" id="stat-inprogress">0</div>
+      </div>
+      <div class="bg-white border border-slate-200 p-3.5 rounded-md shadow-sm">
+        <div class="text-xs font-medium text-slate-500 mb-1">완료 업무</div>
+        <div class="text-2xl font-bold text-emerald-600" id="stat-completed">0</div>
+      </div>
+      <div class="bg-white border border-slate-200 p-3.5 rounded-md shadow-sm">
+        <div class="text-xs font-medium text-slate-500 mb-1">진행률 (완료율)</div>
+        <div class="text-2xl font-bold text-slate-900" id="stat-rate">0%</div>
+      </div>
+      <div class="bg-white border border-slate-200 p-3.5 rounded-md shadow-sm col-span-2 sm:col-span-1">
+        <div class="text-xs font-medium text-amber-600 mb-1 flex items-center gap-1">
+          <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+          <span>마감 임박 / 지연</span>
+        </div>
+        <div class="text-2xl font-bold text-amber-600" id="stat-urgent">0</div>
+      </div>
+    </section>
+
+    <!-- Filters Bar -->
+    <section class="bg-white p-2.5 rounded-md border border-slate-200 flex items-center justify-between gap-2 overflow-x-auto shadow-sm">
+      <div class="flex items-center gap-1.5 min-w-max">
+        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider px-2">필터:</span>
+        <button onclick="setFilter('all')" id="filter-all" class="filter-btn active px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-900 text-white">
+          전체
+        </button>
+        <button onclick="setFilter('today')" id="filter-today" class="filter-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">
+          오늘 할 일
+        </button>
+        <button onclick="setFilter('this-week')" id="filter-this-week" class="filter-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">
+          이번 주
+        </button>
+        <button onclick="setFilter('urgent')" id="filter-urgent" class="filter-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">
+          마감 임박/지연
+        </button>
+        <button onclick="setFilter('high-priority')" id="filter-high-priority" class="filter-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">
+          중요 업무
+        </button>
+        <button onclick="setFilter('done')" id="filter-done" class="filter-btn px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-slate-100 text-slate-600 hover:bg-slate-200">
+          완료 업무
+        </button>
+      </div>
+      <div id="active-filter-indicator" class="text-xs text-slate-500 hidden sm:block whitespace-nowrap">
+        전체 보기 중
+      </div>
+    </section>
+
+    <!-- Kanban Board Columns -->
+    <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 flex-1 items-start">
+      
+      <!-- TODO Column -->
+      <div class="bg-slate-100/80 border border-slate-200 rounded-md p-3 flex flex-col max-h-[calc(100vh-250px)] min-h-[500px]">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            <h2 class="font-bold text-slate-800 text-sm">할 일</h2>
+            <span id="count-todo" class="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-semibold">0</span>
+          </div>
+          <button onclick="openTaskModal('todo')" class="text-slate-500 hover:text-slate-800 p-1 rounded hover:bg-slate-200 transition-colors">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div id="col-todo" class="kanban-column flex-1 overflow-y-auto space-y-2.5 pr-1 transition-colors border-2 border-transparent rounded-md" data-status="todo">
+          <!-- Cards injected here -->
+        </div>
+      </div>
+
+      <!-- IN PROGRESS Column -->
+      <div class="bg-slate-100/80 border border-slate-200 rounded-md p-3 flex flex-col max-h-[calc(100vh-250px)] min-h-[500px]">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-brand-500"></span>
+            <h2 class="font-bold text-slate-800 text-sm">진행 중</h2>
+            <span id="count-in-progress" class="text-xs bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-semibold">0</span>
+          </div>
+          <button onclick="openTaskModal('in-progress')" class="text-slate-500 hover:text-slate-800 p-1 rounded hover:bg-slate-200 transition-colors">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div id="col-in-progress" class="kanban-column flex-1 overflow-y-auto space-y-2.5 pr-1 transition-colors border-2 border-transparent rounded-md" data-status="in-progress">
+          <!-- Cards injected here -->
+        </div>
+      </div>
+
+      <!-- REVIEW Column -->
+      <div class="bg-slate-100/80 border border-slate-200 rounded-md p-3 flex flex-col max-h-[calc(100vh-250px)] min-h-[500px]">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+            <h2 class="font-bold text-slate-800 text-sm">검토</h2>
+            <span id="count-review" class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">0</span>
+          </div>
+          <button onclick="openTaskModal('review')" class="text-slate-500 hover:text-slate-800 p-1 rounded hover:bg-slate-200 transition-colors">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div id="col-review" class="kanban-column flex-1 overflow-y-auto space-y-2.5 pr-1 transition-colors border-2 border-transparent rounded-md" data-status="review">
+          <!-- Cards injected here -->
+        </div>
+      </div>
+
+      <!-- DONE Column -->
+      <div class="bg-slate-100/80 border border-slate-200 rounded-md p-3 flex flex-col max-h-[calc(100vh-250px)] min-h-[500px]">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <h2 class="font-bold text-slate-800 text-sm">완료</h2>
+            <span id="count-done" class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">0</span>
+          </div>
+          <button onclick="openTaskModal('done')" class="text-slate-500 hover:text-slate-800 p-1 rounded hover:bg-slate-200 transition-colors">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div id="col-done" class="kanban-column flex-1 overflow-y-auto space-y-2.5 pr-1 transition-colors border-2 border-transparent rounded-md" data-status="done">
+          <!-- Cards injected here -->
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Task Add / Edit Modal -->
+  <div id="task-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-md border border-slate-200 shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+        <h3 id="modal-title" class="text-base font-bold text-slate-900">새 업무 추가</h3>
+        <button onclick="closeTaskModal()" class="text-slate-400 hover:text-slate-600 rounded p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="task-form" onsubmit="handleTaskSubmit(event)" class="p-5 space-y-4 overflow-y-auto flex-1">
+        <input type="hidden" id="task-id">
+
+        <!-- Title -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">업무명 <span class="text-rose-500">*</span></label>
+          <input type="text" id="task-title" required placeholder="예: 3분기 사업 계획서 작성" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+        </div>
+
+        <!-- Status & Type -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">진행 상태</label>
+            <select id="task-status" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="todo">할 일</option>
+              <option value="in-progress">진행 중</option>
+              <option value="review">검토</option>
+              <option value="done">완료</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">업무 유형</label>
+            <select id="task-category" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="보고">보고</option>
+              <option value="회의">회의</option>
+              <option value="자료작성">자료작성</option>
+              <option value="요청사항">요청사항</option>
+              <option value="개인업무">개인업무</option>
+              <option value="기타">기타</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Priority & Due Date -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">중요도</label>
+            <select id="task-priority" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="high">높음</option>
+              <option value="medium" selected>보통</option>
+              <option value="low">낮음</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">마감일</label>
+            <input type="date" id="task-due-date" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <!-- Assignee -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">담당자 또는 협업자</label>
+          <input type="text" id="task-assignee" placeholder="예: 홍길동 팀장, 본인" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">상세 메모</label>
+          <textarea id="task-desc" rows="3" placeholder="업무 핵심 내용 및 전달 요구사항 기재" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-500"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex justify-between items-center">
+          <button type="button" id="delete-btn" onclick="deleteCurrentTask()" class="px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-md transition-colors hidden">
+            업무 삭제
+          </button>
+          <div class="flex gap-2 ml-auto">
+            <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-md transition-colors">
+              취소
+            </button>
+            <button type="submit" class="px-4 py-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-md transition-colors shadow-sm">
+              저장
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Weekly Report Modal -->
+  <div id="weekly-report-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-md border border-slate-200 shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <i data-lucide="file-text" class="w-5 h-5 text-brand-600"></i>
+          <h3 class="text-base font-bold text-slate-900">주간 업무보고 생성</h3>
+        </div>
+        <button onclick="closeWeeklyReportModal()" class="text-slate-400 hover:text-slate-600 rounded p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto flex-1 space-y-4">
+        <p class="text-xs text-slate-500">
+          현재 칸반보드 데이터를 바탕으로 정돈된 보고서 양식입니다. 복사 버튼을 눌러 이메일이나 메신저에 바로 붙여넣으세요.
+        </p>
+
+        <div class="relative">
+          <textarea id="weekly-report-text" readonly class="w-full h-80 p-4 bg-slate-50 border border-slate-200 rounded-md text-xs font-mono text-slate-800 leading-relaxed focus:outline-none resize-none"></textarea>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 border-t border-slate-100 flex justify-between items-center bg-slate-50">
+        <span id="copy-status" class="text-xs text-emerald-600 font-medium opacity-0 transition-opacity">복사되었습니다!</span>
+        <div class="flex gap-2">
+          <button onclick="closeWeeklyReportModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">
+            닫기
+          </button>
+
+          <button onclick="downloadWeeklyReportPDF()" class="px-3.5 py-2 text-sm font-medium bg-rose-600 hover:bg-rose-700 text-white rounded-md transition-colors shadow-sm flex items-center gap-1.5">
+            <i data-lucide="file-down" class="w-4 h-4"></i>
+            <span>PDF 다운로드</span>
+          </button>
+
+          <button onclick="copyWeeklyReport()" class="px-4 py-2 text-sm font-medium bg-slate-900 hover:bg-slate-800 text-white rounded-md transition-colors shadow-sm flex items-center gap-1.5">
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span>텍스트 복사</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-2.5 rounded-md text-xs shadow-lg transition-all duration-300 transform translate-y-10 opacity-0 z-50 flex items-center gap-2">
+    <i data-lucide="info" class="w-4 h-4 text-brand-500"></i>
+    <span id="toast-message">메시지</span>
+  </div>
+
+  <script>
+    // State Management
+    let tasks = [];
+    let currentFilter = 'all';
+    let draggedTaskId = null;
+
+    // Default Sample Data
+    const sampleTasks = [
+      {
+        id: 'task-1',
+        title: '2026년 4분기 사업 계획서 최종 제출',
+        desc: '팀별 예산안 반영 및 임원진 수시보고용 요약본 첨부 작성',
+        status: 'in-progress',
+        priority: 'high',
+        category: '보고',
+        dueDate: getRelativeDate(1), // Tomorrow
+        assignee: '본인',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-2',
+        title: '신규 프로젝트 협업 부서 미팅',
+        desc: '디자인팀 및 개발팀 담당자 사전 요구사항 수집',
+        status: 'todo',
+        priority: 'medium',
+        category: '회의',
+        dueDate: getRelativeDate(3),
+        assignee: '김철수 팀장',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-3',
+        title: '부서별 업무 협조 요청서 확인',
+        desc: '보안 가이드라인 준수여부 검토 필요',
+        status: 'review',
+        priority: 'high',
+        category: '요청사항',
+        dueDate: getRelativeDate(0), // Today
+        assignee: '이영희 차장',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-4',
+        title: '월간 시스템 점검 및 결과 보고서 정리',
+        desc: '서버 트래픽 로그 분석 완료 데이터 정리',
+        status: 'done',
+        priority: 'low',
+        category: '자료작성',
+        dueDate: getRelativeDate(-2),
+        assignee: '본인',
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: 'task-5',
+        title: '하반기 직무 역량강화 교육 신청',
+        desc: 'HR 시스템 접속 후 모듈 수강 신청',
+        status: 'todo',
+        priority: 'low',
+        category: '개인업무',
+        dueDate: getRelativeDate(5),
+        assignee: '본인',
+        createdAt: new Date().toISOString()
+      }
+    ];
+
+    // Helper: Get YYYY-MM-DD relative to today
+    function getRelativeDate(daysOffset) {
+      const d = new Date();
+      d.setDate(d.getDate() + daysOffset);
+      return d.toISOString().split('T')[0];
+    }
+
+    // App Initialization
+    window.addEventListener('DOMContentLoaded', () => {
+      loadTasks();
+      setupDragAndDrop();
+      renderApp();
+      lucide.createIcons();
+    });
+
+    // LocalStorage Management
+    function loadTasks() {
+      const saved = localStorage.getItem('kanban_tasks_v1');
+      if (saved) {
+        try {
+          tasks = JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to parse saved tasks", e);
+          tasks = [...sampleTasks];
+        }
+      } else {
+        tasks = [...sampleTasks];
+        saveTasks();
+      }
+    }
+
+    function saveTasks() {
+      localStorage.setItem('kanban_tasks_v1', JSON.stringify(tasks));
+      renderApp();
+    }
+
+    function setFilter(filterType) {
+      currentFilter = filterType;
+      
+      // Update UI active filter button
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-900', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-600');
+      });
+
+      const activeBtn = document.getElementById(`filter-${filterType}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-100', 'text-slate-600');
+        activeBtn.classList.add('bg-slate-900', 'text-white');
+      }
+
+      const indicator = document.getElementById('active-filter-indicator');
+      const filterNames = {
+        'all': '전체 보기 중',
+        'today': '오늘 할 일만 보기',
+        'this-week': '이번 주 업무 보기',
+        'urgent': '마감 임박/지연 업무만 보기',
+        'high-priority': '중요 업무만 보기',
+        'done': '완료 업무만 보기'
+      };
+      if (indicator) indicator.textContent = filterNames[filterType] || '';
+
+      renderApp();
+    }
+
+    // Check Date Urgency
+    function getDueDateStatus(dueDateStr, isDone) {
+      if (!dueDateStr || isDone) return 'normal';
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const due = new Date(dueDateStr);
+      due.setHours(0, 0, 0, 0);
+
+      const diffTime = due - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) return 'overdue'; // 마감 지남
+      if (diffDays <= 2) return 'imminent'; // 마감 임박 (오늘, 내일, 모레)
+      return 'normal';
+    }
+
+    function isTaskMatchingFilter(task) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const dueDateStatus = getDueDateStatus(task.dueDate, task.status === 'done');
+
+      switch (currentFilter) {
+        case 'today':
+          return task.dueDate === todayStr;
+        case 'this-week': {
+          if (!task.dueDate) return false;
+          const today = new Date();
+          const target = new Date(task.dueDate);
+          const diffDays = (target - today) / (1000 * 60 * 60 * 24);
+          return diffDays >= -1 && diffDays <= 7;
+        }
+        case 'urgent':
+          return dueDateStatus === 'overdue' || dueDateStatus === 'imminent';
+        case 'high-priority':
+          return task.priority === 'high';
+        case 'done':
+          return task.status === 'done';
+        case 'all':
+        default:
+          return true;
+      }
+    }
+
+    function renderApp() {
+      const statuses = ['todo', 'in-progress', 'review', 'done'];
+      const containers = {
+        'todo': document.getElementById('col-todo'),
+        'in-progress': document.getElementById('col-in-progress'),
+        'review': document.getElementById('col-review'),
+        'done': document.getElementById('col-done')
+      };
+
+      const counts = { 'todo': 0, 'in-progress': 0, 'review': 0, 'done': 0 };
+      let urgentCount = 0;
+
+      // Clear columns
+      statuses.forEach(s => {
+        if (containers[s]) containers[s].innerHTML = '';
+      });
+
+      // Filter and append cards
+      tasks.forEach(task => {
+        const isUrgent = getDueDateStatus(task.dueDate, task.status === 'done');
+        if (isUrgent === 'overdue' || isUrgent === 'imminent') {
+          urgentCount++;
+        }
+
+        if (isTaskMatchingFilter(task)) {
+          counts[task.status] = (counts[task.status] || 0) + 1;
+          const cardHtml = createCardElement(task);
+          if (containers[task.status]) {
+            containers[task.status].appendChild(cardHtml);
+          }
+        }
+      });
+
+      // Update Column Counters
+      document.getElementById('count-todo').textContent = counts['todo'];
+      document.getElementById('count-in-progress').textContent = counts['in-progress'];
+      document.getElementById('count-review').textContent = counts['review'];
+      document.getElementById('count-done').textContent = counts['done'];
+
+      // Update KPI Banner Stats
+      const total = tasks.length;
+      const completed = tasks.filter(t => t.status === 'done').length;
+      const inProgress = tasks.filter(t => t.status === 'in-progress' || t.status === 'review').length;
+      const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-inprogress').textContent = inProgress;
+      document.getElementById('stat-completed').textContent = completed;
+      document.getElementById('stat-rate').textContent = `${rate}%`;
+      document.getElementById('stat-urgent').textContent = urgentCount;
+
+      lucide.createIcons();
+    }
+
+    function createCardElement(task) {
+      const card = document.createElement('div');
+      card.className = 'task-card bg-white p-3.5 rounded-md border border-slate-200 shadow-sm hover:shadow transition-all cursor-grab active:cursor-grabbing group relative';
+      card.draggable = true;
+      card.dataset.id = task.id;
+
+      const dateStatus = getDueDateStatus(task.dueDate, task.status === 'done');
+
+      // Priority Label Map
+      const priorityMap = {
+        high: { text: '높음', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+        medium: { text: '보통', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+        low: { text: '낮음', cls: 'bg-slate-50 text-slate-500 border-slate-200' }
+      };
+
+      // Due Date Badge Styling
+      let dueDateBadge = '';
+      if (task.dueDate) {
+        if (task.status === 'done') {
+          dueDateBadge = `<span class="text-xs text-slate-400 flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i>${task.dueDate}</span>`;
+        } else if (dateStatus === 'overdue') {
+          dueDateBadge = `<span class="text-xs text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3"></i>마감 초과 (${task.dueDate})</span>`;
+        } else if (dateStatus === 'imminent') {
+          dueDateBadge = `<span class="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded font-semibold flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i>마감 임박 (${task.dueDate})</span>`;
+        } else {
+          dueDateBadge = `<span class="text-xs text-slate-500 flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i>${task.dueDate}</span>`;
+        }
+      }
+
+      card.innerHTML = `
+        <div class="flex items-start justify-between gap-2 mb-2">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded border ${priorityMap[task.priority].cls}">
+              ${priorityMap[task.priority].text}
+            </span>
+            <span class="text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded">
+              ${task.category || '기타'}
+            </span>
+          </div>
+          <button onclick="openTaskModalForEdit('${task.id}')" class="text-slate-300 hover:text-slate-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <h3 class="text-sm font-semibold text-slate-900 leading-snug mb-1.5 ${task.status === 'done' ? 'line-through text-slate-400' : ''}">
+          ${escapeHtml(task.title)}
+        </h3>
+
+        ${task.desc ? `<p class="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">${escapeHtml(task.desc)}</p>` : ''}
+
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 mt-2">
+          <div class="flex items-center gap-1">
+            ${dueDateBadge}
+          </div>
+          ${task.assignee ? `
+            <div class="flex items-center gap-1 text-slate-600 font-medium bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+              <i data-lucide="user" class="w-3 h-3 text-slate-400"></i>
+              <span class="text-[11px] truncate max-w-[80px]">${escapeHtml(task.assignee)}</span>
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      // Drag Events Attached to Card
+      card.addEventListener('dragstart', (e) => {
+        draggedTaskId = task.id;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        draggedTaskId = null;
+      });
+
+      // Click card to edit
+      card.addEventListener('click', (e) => {
+        if (!e.target.closest('button')) {
+          openTaskModalForEdit(task.id);
+        }
+      });
+
+      return card;
+    }
+
+    // Escape HTML Helper
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>"']/g, function(m) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;'
+        }[m];
+      });
+    }
+
+    function setupDragAndDrop() {
+      const columns = document.querySelectorAll('.kanban-column');
+
+      columns.forEach(col => {
+        col.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          col.classList.add('drag-over');
+        });
+
+        col.addEventListener('dragleave', () => {
+          col.classList.remove('drag-over');
+        });
+
+        col.addEventListener('drop', (e) => {
+          e.preventDefault();
+          col.classList.remove('drag-over');
+          
+          if (!draggedTaskId) return;
+
+          const targetStatus = col.dataset.status;
+          const taskIndex = tasks.findIndex(t => t.id === draggedTaskId);
+
+          if (taskIndex !== -1 && tasks[taskIndex].status !== targetStatus) {
+            tasks[taskIndex].status = targetStatus;
+            saveTasks();
+            showToast(`업무 상태가 변경되었습니다.`);
+          }
+        });
+      });
+    }
+
+    function openTaskModal(defaultStatus = 'todo') {
+      document.getElementById('task-form').reset();
+      document.getElementById('task-id').value = '';
+      document.getElementById('modal-title').textContent = '새 업무 추가';
+      document.getElementById('task-status').value = defaultStatus;
+      document.getElementById('delete-btn').classList.add('hidden');
+      
+      // Default due date: Today
+      document.getElementById('task-due-date').value = new Date().toISOString().split('T')[0];
+
+      document.getElementById('task-modal').classList.remove('hidden');
+    }
+
+    function openTaskModalForEdit(taskId) {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      document.getElementById('task-id').value = task.id;
+      document.getElementById('modal-title').textContent = '업무 수정';
+      document.getElementById('task-title').value = task.title;
+      document.getElementById('task-status').value = task.status;
+      document.getElementById('task-category').value = task.category || '기타';
+      document.getElementById('task-priority').value = task.priority;
+      document.getElementById('task-due-date').value = task.dueDate || '';
+      document.getElementById('task-assignee').value = task.assignee || '';
+      document.getElementById('task-desc').value = task.desc || '';
+
+      document.getElementById('delete-btn').classList.remove('hidden');
+      document.getElementById('task-modal').classList.remove('hidden');
+    }
+
+    function closeTaskModal() {
+      document.getElementById('task-modal').classList.add('hidden');
+    }
+
+    function handleTaskSubmit(e) {
+      e.preventDefault();
+
+      const id = document.getElementById('task-id').value;
+      const title = document.getElementById('task-title').value.trim();
+      const status = document.getElementById('task-status').value;
+      const category = document.getElementById('task-category').value;
+      const priority = document.getElementById('task-priority').value;
+      const dueDate = document.getElementById('task-due-date').value;
+      const assignee = document.getElementById('task-assignee').value.trim();
+      const desc = document.getElementById('task-desc').value.trim();
+
+      if (!title) return;
+
+      if (id) {
+        // Edit existing
+        const index = tasks.findIndex(t => t.id === id);
+        if (index !== -1) {
+          tasks[index] = {
+            ...tasks[index],
+            title,
+            status,
+            category,
+            priority,
+            dueDate,
+            assignee,
+            desc
+          };
+          showToast('업무 내용이 수정되었습니다.');
+        }
+      } else {
+        // Add new
+        const newTask = {
+          id: 'task-' + Date.now(),
+          title,
+          status,
+          category,
+          priority,
+          dueDate,
+          assignee,
+          desc,
+          createdAt: new Date().toISOString()
+        };
+        tasks.push(newTask);
+        showToast('새 업무가 등록되었습니다.');
+      }
+
+      saveTasks();
+      closeTaskModal();
+    }
+
+    function deleteCurrentTask() {
+      const id = document.getElementById('task-id').value;
+      if (!id) return;
+
+      if (confirm('이 업무 카드를 삭제하시겠습니까?')) {
+        tasks = tasks.filter(t => t.id !== id);
+        saveTasks();
+        closeTaskModal();
+        showToast('업무가 삭제되었습니다.');
+      }
+    }
+
+    function clearCompletedTasks() {
+      const completedCount = tasks.filter(t => t.status === 'done').length;
+      if (completedCount === 0) {
+        showToast('정리할 완료 업무가 없습니다.');
+        return;
+      }
+
+      if (confirm(`완료 상태인 업무 ${completedCount}개를 보관 삭제하시겠습니까?`)) {
+        tasks = tasks.filter(t => t.status !== 'done');
+        saveTasks();
+        showToast('완료된 업무가 일괄 정리되었습니다.');
+      }
+    }
+
+    function confirmResetData() {
+      if (confirm('모든 데이터가 초기화되고 샘플 업무가 재설정됩니다. 진행하시겠습니까?')) {
+        tasks = [...sampleTasks];
+        saveTasks();
+        showToast('초기 상태로 복원되었습니다.');
+      }
+    }
+
+    function openWeeklyReportModal() {
+      const reportText = generateWeeklyReportText();
+      document.getElementById('weekly-report-text').value = reportText;
+      document.getElementById('weekly-report-modal').classList.remove('hidden');
+    }
+
+    function closeWeeklyReportModal() {
+      document.getElementById('weekly-report-modal').classList.add('hidden');
+    }
+
+    function generateWeeklyReportText() {
+      const today = new Date();
+      const dateString = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일 기준`;
+
+      const doneTasks = tasks.filter(t => t.status === 'done');
+      const inProgressTasks = tasks.filter(t => t.status === 'in-progress');
+      const reviewTasks = tasks.filter(t => t.status === 'review');
+      const todoTasks = tasks.filter(t => t.status === 'todo');
+
+      // Urgent issues (overdue or review)
+      const issueTasks = tasks.filter(t => {
+        if (t.status === 'done') return false;
+        const dateStatus = getDueDateStatus(t.dueDate, false);
+        return dateStatus === 'overdue' || t.status === 'review';
+      });
+
+      let report = `[주간 업무 보고서 - ${dateString}]\n`;
+      report += `========================================\n\n`;
+
+      // 1. 이번 주 완료 업무
+      report += `[이번 주 완료 업무] (${doneTasks.length}건)\n`;
+      if (doneTasks.length === 0) {
+        report += `- 완료된 업무가 없습니다.\n`;
+      } else {
+        doneTasks.forEach((t, i) => {
+          report += `${i + 1}. [${t.category}] ${t.title} (담당: ${t.assignee || '본인'})\n`;
+        });
+      }
+      report += `\n`;
+
+      // 2. 진행 중 업무
+      report += `[진행 중 업무] (${inProgressTasks.length}건)\n`;
+      if (inProgressTasks.length === 0) {
+        report += `- 현재 진행 중인 업무가 없습니다.\n`;
+      } else {
+        inProgressTasks.forEach((t, i) => {
+          const due = t.dueDate ? ` | 마감일: ${t.dueDate}` : '';
+          report += `${i + 1}. [${t.category}] ${t.title}${due} (담당: ${t.assignee || '본인'})\n`;
+          if (t.desc) report += `   └ 메모: ${t.desc}\n`;
+        });
+      }
+      report += `\n`;
+
+      // 3. 주요 이슈 및 검토 필요 사항
+      report += `[주요 이슈 및 검토 사항] (${issueTasks.length}건)\n`;
+      if (issueTasks.length === 0) {
+        report += `- Special issue 없음 (정상 진행 중)\n`;
+      } else {
+        issueTasks.forEach((t, i) => {
+          const dateStatus = getDueDateStatus(t.dueDate, false);
+          let tag = t.status === 'review' ? '[검토대기]' : '';
+          if (dateStatus === 'overdue') tag += '[마감경과]';
+
+          report += `${i + 1}. ${tag} [${t.category}] ${t.title} (마감: ${t.dueDate || '미정'})\n`;
+        });
+      }
+      report += `\n`;
+
+      // 4. 다음 주 예정 업무
+      report += `[다음 주 예정 업무] (${todoTasks.length}건)\n`;
+      if (todoTasks.length === 0) {
+        report += `- 등록된 대기 업무가 없습니다.\n`;
+      } else {
+        todoTasks.forEach((t, i) => {
+          const due = t.dueDate ? ` (마감: ${t.dueDate})` : '';
+          report += `${i + 1}. [${t.category}] ${t.title}${due}\n`;
+        });
+      }
+
+      report += `\n========================================\n`;
+      report += `작성일: ${new Date().toLocaleDateString('ko-KR')}`;
+
+      return report;
+    }
+
+    function copyWeeklyReport() {
+      const textarea = document.getElementById('weekly-report-text');
+      textarea.select();
+      
+      try {
+        document.execCommand('copy');
+        const statusEl = document.getElementById('copy-status');
+        statusEl.classList.remove('opacity-0');
+        setTimeout(() => {
+          statusEl.classList.add('opacity-0');
+        }, 2000);
+      } catch (err) {
+        showToast('복사에 실패했습니다. 직접 드래그하여 복사해 주세요.');
+      }
+    }
+
+    function downloadWeeklyReportPDF() {
+      const reportText = generateWeeklyReportText();
+      
+      // Temporary printable DOM structure for PDF export
+      const element = document.createElement('div');
+      element.style.padding = '32px';
+      element.style.backgroundColor = '#ffffff';
+      element.style.color = '#0f172a';
+      element.style.fontFamily = 'Pretendard, -apple-system, BlinkMacSystemFont, sans-serif';
+
+      element.innerHTML = `
+        <div style="border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 20px;">
+          <h1 style="font-size: 22px; font-weight: bold; color: #0f172a; margin: 0 0 6px 0;">주간 업무보고서</h1>
+          <p style="font-size: 12px; color: #64748b; margin: 0;">발행일자: ${new Date().toLocaleDateString('ko-KR')}</p>
+        </div>
+        <div style="font-size: 12px; line-height: 1.8; white-space: pre-wrap; font-family: monospace, Pretendard, sans-serif; background-color: #f8fafc; padding: 20px; border-radius: 6px; border: 1px solid #e2e8f0; color: #1e293b;">${escapeHtml(reportText)}</div>
+        <div style="margin-top: 24px; text-align: right; font-size: 11px; color: #94a3b8;">
+          개인 업무관리 칸반보드 자동생성 문서
+        </div>
+      `;
+
+      const opt = {
+        margin:       10,
+        filename:     `주간업무보고_${new Date().toISOString().split('T')[0]}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, logging: false, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      showToast('PDF 생성 중...');
+      
+      html2pdf().set(opt).from(element).save().then(() => {
+        showToast('PDF 파일 다운로드가 완료되었습니다.');
+      }).catch(err => {
+        console.error('PDF export error:', err);
+        showToast('PDF 생성 중 오류가 발생했습니다.');
+      });
+    }
+
+    // Toast Notification
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      
+      toastMsg.textContent = msg;
+      toast.classList.remove('translate-y-10', 'opacity-0');
+
+      setTimeout(() => {
+        toast.classList.add('translate-y-10', 'opacity-0');
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
